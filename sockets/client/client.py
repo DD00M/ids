@@ -121,7 +121,6 @@ class ClientWindow(QDialog):
 
     def buttonActionOK(self): 
         self.data['action']='ok'
-        self.check_parameters_and_set_defult_values()
         data=json.dumps(self.data)
         self.client_thread.send_message(data)
 

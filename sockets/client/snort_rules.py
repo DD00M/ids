@@ -205,7 +205,6 @@ class SnortRuleForm(QWidget):
         dest_port = self.dest_port_input.text()
         message=self.message_text_input.text()
         rule_id = self.rule_id_input.text()
-        classtype=self.class_type_input.text()
         rev=self.gid_input.text()
         
         for rule in client_utils.rules:
@@ -234,7 +233,7 @@ class SnortRuleForm(QWidget):
         if self.checkbox_psh.isChecked(): flags+='P'
         if flags: new_rule+=f'flags:{flags}; '
 
-        if rev: new_rule+= 'rev:{rev}; ' 
+        if rev: new_rule+= f'rev:{rev}; ' 
         new_rule+=f'sid: {rule_id};)'  
         
         print(get_response_from_ssl_socker('add',new_rule))

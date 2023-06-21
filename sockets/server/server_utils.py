@@ -73,7 +73,7 @@ def create_df_http(file):
 #la nevoie, functia poate fi reapelata
 def get_zeek_logs():
     try:
-        output=subprocess.check_output(['zeek','-C','-r','/home/cristiana/capfiles/capfile0'])
+        output=subprocess.check_output(['zeek','-C','-r','/home/cristiana/capfiles/capfile1'])
     except subprocess.CalledProcessError as e:
         print(e.output)
     output=subprocess.call('mv /home/cristiana/pyqt/two_windows/sockets/server/*.log /home/cristiana/pyqt/two_windows/logs/',shell=True)
@@ -144,7 +144,7 @@ def get_cluster_groups(df,ftrs,clf,bro_matrix,numClusters,pcaComponents,clusteri
     
     cluster_groups = odd_df.groupby('cluster')
     result=dict()
-    for key, group in normal_groups:
+    for key, group in cluster_groups:
         res=group.to_json(orient='records')#string representation    
         result[str(key)]=res
     

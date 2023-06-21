@@ -39,7 +39,8 @@ class ServerThread(threading.Thread):
         self.response_compare=None
         self.models=dict()
         self.parameters=None
-        self.clusterningAlg='kmeans1'
+        self.conn_by_alg=None
+        self.clustering_alg='kmeans'
 
     def run(self):
         print(f"Connected to {self.client_address}")
@@ -65,7 +66,8 @@ class ServerThread(threading.Thread):
                     response['rules']=json.dumps(rules)
                     response['alerts']=json.dumps(alerts)
                     response=json.dumps(response)
-                except:
+                except Exception as e:
+                    print(e)
                     response='error in getting rules and alerts from remote machine'
                 ssl_client_socket.sendall(response.encode())
             elif action == 'block' :
@@ -85,7 +87,8 @@ class ServerThread(threading.Thread):
                 try:
                     self.conn_type=data['conn']
                     self.bro_df,self.features=create_df_conn(conn_log_file)  if 'conn' == self.conn_type else create_df_file(file_log_file) if 'file' == self.conn_type else create_df_http(http_log_file) 
-                except: 
+                except Exception as e: 
+                    print(e)
                     response="error parsing log data"
                     ssl_client_socket.sendall(response.encode())
                     break
@@ -95,11 +98,12 @@ class ServerThread(threading.Thread):
                         bro_matrix=to_matrix.fit_transform(bro_df_aux[self.features],normalize=True)   
                         scores=detect_optimal_number_of_clusters(bro_matrix)
                         response=dict()
-                        alg_by_conn,conn_by_alg=get_statistics()
-                        response['statistics']=json.dumps(conn_by_alg)
+                        alg_by_conn,self.conn_by_alg=get_statistics()
+                        response['statistics']=json.dumps(self.conn_by_alg)
                         response['scores']=" ".join(map(lambda x : str(x),scores))
                         response=json.dumps(response)
-                    except:
+                    except Exception as e:
+                        print(e)
                         response='error in getting statistics'
                 elif action=='train':
                     self.alg=data['alg']
@@ -117,17 +121,25 @@ class ServerThread(threading.Thread):
                                     try:
                                         response=self.already_train()
                                         self.models[self.alg]=self.model
-                                    except: response="error Can't use already trained model!"
-                                except: response='error reading data from db!'
+                                    except Exception as e: 
+                                        print(e)
+                                        response="error Can't use already trained model!"
+                                except Exception as e: 
+                                    print(e)
+                                    response='error reading data from db!'
                             else:response="error performing this action. Train sth first!"
-                        except: response='error reading data from db!'  
+                        except Exception as e: 
+                            print(e)
+                            response='error reading data from db!'  
                     else:
                         print("Training model for connection type based on log file")
                         self.pcaComponents=data['pcaComponents']
                         self.numClusters=data['numClusters']
                         try:
                             response=self.train()
-                        except: response='error training model!'
+                        except Exception as e:
+                            print(e)
+                            response='error in training data'
                 elif action=='retrain':
                     if 'parameters' in data:
                         self.parameters=data['parameters']
@@ -135,17 +147,20 @@ class ServerThread(threading.Thread):
                     self.pcaComponents=data['pcaComponents']
                     self.numClusters=data['numClusters']
                     print('Retraining model for: '+self.alg)
-                    # try:  
-                    response=self.retrain()
-                    # except: response='error RE-training model!'
+                    try:
+                        response=self.retrain()
+                    except Exception as e:
+                        print(e)
+                        response='error in RE-training data'
+                   
                 elif action == 'save':
                     if self.response_compare:
                         self.alg=data['alg']
                         self.model=self.models[data['alg']]
                         self.response_compare=None
-                    # try: #TODO punem try except-urile aici sau in functiile de save si read ca sa inconjuram functiile ce lucreaza cu bd ??
-                    response=self.save()
-                    # except: response='error saving model to db!'
+                    try: 
+                        response=self.save()
+                    except: response='error saving model to db!'
                 elif action=='compare':
                     if data['how'] == 'no':
                         self.pcaComponents=data['pcaComponents']
@@ -154,7 +169,9 @@ class ServerThread(threading.Thread):
                     try:
                         self.response_compare=self.compare()
                         response=json.dumps(self.response_compare)
-                    except: response='error creating comparison statistics!'
+                    except Exception as e: 
+                        print(e)
+                        response='error creating comparison statistics!'
             
                 ssl_client_socket.sendall(response.encode())
             
@@ -169,7 +186,7 @@ class ServerThread(threading.Thread):
         bro_matrix=to_matrix.fit_transform(df[ftrs],normalize=True)        
         ftrs.append('score')
         clf=self.model
-        return get_cluster_groups(df,ftrs,clf,bro_matrix,self.numClusters,self.pcaComponents,self.clusterningAlg)
+        return get_cluster_groups(df,ftrs,clf,bro_matrix,self.numClusters,self.pcaComponents,self.clustering_alg)
         
     def train(self):
     
@@ -186,16 +203,18 @@ class ServerThread(threading.Thread):
         clf.fit(bro_matrix)
         self.model=clf
         self.models[self.alg]=self.model
-        return get_cluster_groups(df,ftrs,clf,bro_matrix,self.numClusters,self.pcaComponents,self.clusterningAlg)
+        return get_cluster_groups(df,ftrs,clf,bro_matrix,self.numClusters,self.pcaComponents,self.clustering_alg)
     
     def retrain(self):
+        #regenereaza log-uri pentru reantrenare
         get_zeek_logs()
         self.bro_df,self.features=create_df_conn(conn_log_file)  if 'conn' == self.conn_type else create_df_file(file_log_file) if 'file' == self.conn_type else create_df_http(http_log_file) 
         result = self.train()
-        # pickle.dump(self.model,open('./model.sav','wb'))
-        # with open('./model.sav','rb') as f: bytes_model=f.read()
-        # update_model((b64encode(bytes_model).decode('utf-8')),self.pcaComponents,self.numClusters,self.alg,self.conn_type,self.iteration)
-        # update_data(self.conn_type,self.iteration)
+        if self.conn_by_alg:
+            pickle.dump(self.model,open('./model.sav','wb'))
+            with open('./model.sav','rb') as f: bytes_model=f.read()
+            update_model((b64encode(bytes_model).decode('utf-8')),self.pcaComponents,self.numClusters,self.alg,self.conn_type,self.iteration)
+            update_data(self.conn_type,self.iteration)
         return result
         
     def compare(self):
@@ -216,9 +235,10 @@ class ServerThread(threading.Thread):
                         clf=pickle.load(open('./model.sav','rb'))
                     pcaComponents=model_result[4]
                     numClusters=model_result[5]
-                    cluser_greoup_fo_alg=get_cluster_groups(bro_df,features,clf,bro_matrix_aux,numClusters,pcaComponents,self.clusterningAlg)
+                    cluser_greoup_fo_alg=get_cluster_groups(bro_df,features,clf,bro_matrix_aux,numClusters,pcaComponents,self.clustering_alg)
         
-                except:
+                except Exception as e:
+                    print(e)
                     if self.model and self.alg == algorithm:
                         clf=self.model
                     else: #altfel, antrenam acum #TODO ADAUGA OPTUNE SA POATA SALVA
@@ -226,13 +246,13 @@ class ServerThread(threading.Thread):
                         clf.fit(bro_matrix_aux)
                     pcaComponents=self.pcaComponents
                     numClusters=self.numClusters 
-                    cluser_greoup_fo_alg=get_cluster_groups(bro_df,features,clf,bro_matrix_aux,numClusters,pcaComponents,self.clusterningAlg)
+                    cluser_greoup_fo_alg=get_cluster_groups(bro_df,features,clf,bro_matrix_aux,numClusters,pcaComponents,self.clustering_alg)
             else: # antrenam modelul cu parametrii de la celalt model antrenat deja
                 clf=clfs[algorithm]
                 clf.fit(bro_matrix_aux)
                 pcaComponents=self.pcaComponents
                 numClusters=self.numClusters 
-                cluser_greoup_fo_alg=get_cluster_groups(bro_df,features,clf,bro_matrix_aux,numClusters,pcaComponents,self.clusterningAlg)
+                cluser_greoup_fo_alg=get_cluster_groups(bro_df,features,clf,bro_matrix_aux,numClusters,pcaComponents,self.clustering_alg)
                 #Tin minte si modelul nou antrenat in caz ca se doreste salvarea acestuia in BD de catre user
                 self.models[algorithm]=clf
     

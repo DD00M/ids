@@ -1,0 +1,15 @@
+[
+    {
+        "ts": "1686584899.980290",
+        "uid": "CKsUMS3eIv8udzH9Ug",
+        "id.orig_h": "192.168.144.128",
+        "id.orig_p": "48084",
+        "id.resp_h": "172.22.0.2",
+        "id.resp_p": "8000",
+        "name": "TCP_ack_underflow_or_misorder",
+        "addl": "-",
+        "notice": "F",
+        "peer": "zeek",
+        "source": "TCP"
+    }
+]

@@ -30,7 +30,8 @@ def insert_data(conn_type,iteration):
     if conn_type=='http':
         data=format_file(http_log_file,http_features,iteration)
     elif conn_type=='conn':
-        data=format_file(conn_log_file,conn_type,iteration)
+        data=format_file(conn_log_file,conn_features,iteration)
+        print(data)
     elif conn_type=='file':
         data=format_file(file_log_file,file_features,iteration)
     client.execute(f"INSERT INTO {conn_type} FORMAT JSONEachRow", (d for d in data))
